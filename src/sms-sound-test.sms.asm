@@ -1,4 +1,5 @@
 ; This source code was reverse engineered from SMS Sound Test version 1.1, using Emulicious
+; And then extended...
 
 .memorymap
 slotsize $8000
@@ -41,6 +42,7 @@ RAM_ScrollerText dw
 RAM_ScrollerCounter db
 RAM_ScrollerBuffer dsb 32
 RAM_ScrollerBufferTerminator db ; set to $ff at all times
+RAM_LastPSGModeWrite db
 .ende
 
 ; ports
@@ -61,12 +63,12 @@ RAM_ScrollerBufferTerminator db ; set to $ff at all times
 map ' ' to '~' = $20 ; Normal ASCII
 .enda
 
+.section "Boot" force
 ResetPoint:
   jp Main
+.ends
 
-; data from 3 to 14 (18 bytes)
-.ascstr "Sound Test Program"
-
+.section "Main loop" free
 MainLoop:
   call WaitForVBlank
   call CheckInputs
@@ -78,17 +80,15 @@ MainLoop:
   jp z, ResetPoint
   call UpdatePSG
   jp MainLoop
-
+.ends
 
 .org $38
+.section "Interrupt hander" force
 VDPInterruptHandler:
   ex af, af'
   exx
   ; Hander address is left in hl'
   jp (hl)
-
-; data from 3b to 4f (21 bytes)
-.ascstr "Release 1.1 - 2/17/01"
 
 WaitForVBlank:
   ; Wait for flag to be zero
@@ -98,8 +98,10 @@ WaitForVBlank:
   or a
   jr nz, -
   ret
+.ends
 
 .org $66
+.section "NMI hander" force
 PauseHandler:
   push af
     ld a, (RAM_PauseFlag)
@@ -107,10 +109,9 @@ PauseHandler:
     ld (RAM_PauseFlag), a
   pop af
   retn
+.ends
 
-; data from 72 to 93 (34 bytes)
-.ascstr "-Heliophobe (mrscreen@hotmail.com)"
-
+.section "Startup" free
 Main:
   di
   im 1
@@ -206,7 +207,9 @@ Main:
   out (PORT_VDPRegister), a
   ei
   jp MainLoop
+.ends
 
+.section "Scroller" free
 InitScroller:
   ld hl, ScrollerText
   ld (RAM_ScrollerText), hl
@@ -270,7 +273,9 @@ UpdateScroller:
 @EndOfData:
   call InitScroller
   ret
+.ends
 
+.section "Drawing routines" free
 NibbleToHexAscii:
   ; Input: a = a nibble
   ; Putput: a = the ASCII char for that nibble in hex
@@ -439,8 +444,9 @@ PushDEToVBlankWorkQueue:
   ld a, l
   ld (RAM_VBlankWorkQueueIndex), a
   ret
+.ends
 
-; data from 261 to 276 (22 bytes)
+.section "Initialisation data" free
 VDPRegisterData:
 .db $04, $80
 .db $00, $81
@@ -454,15 +460,15 @@ VDPRegisterData:
 .db $00, $89
 .db $ff, $8a
 
-; data from 277 to 296 (32 bytes)
 PaletteData:
 .db $00 $3f $15 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 ; Palette 1: black, white, grey
 .db $00 $0f $15 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 $00 ; Palette 1: black, yellow, grey
+.ends
 
-; data from 297 to 596 (768 bytes)
+.section "Screen text" free
 ScreenText:
 .ascstr "--------------------------------"
-.ascstr "SMS Sound test (v1.1)           "
+.ascstr "SMS Sound test (v1.2)           "
 .ascstr "--------------------------------"
 .ascstr "                                "
 .ascstr "                                "
@@ -485,15 +491,18 @@ ScreenText:
 .ascstr "--------------------------------"
 .ascstr "                                "
 .ascstr "--------------------------------"
+.ends
 
+.section "Scroller text" free
 .function Seconds(x) x*60
 
 ScrollerText:
 .ascstr "                                "
 .ascstr " Sega Master System Sound Test  ", $ff, Seconds(3)
-.ascstr " Version 1.1, February 17, 2001 ", $ff, Seconds(3)
+.ascstr " Version 1.2, February 28, 2024 ", $ff, Seconds(3)
 .ascstr "  brought to you by Heliophobe  ", $ff, Seconds(3)
 .ascstr "     (mrscreen@hotmail.com)     ", $ff, Seconds(3)
+.ascstr "     with updates by Maxim      ", $ff, Seconds(3)
 .ascstr "                                "
 .ascstr "             Usage:             ", $ff, Seconds(3)
 .ascstr "D-Pad: Highlight field to change", $ff, Seconds(3)
@@ -556,18 +565,16 @@ ScrollerText:
 .ascstr "neverputsaltinyoureye"
 .ascstr "putsaltinyoureye"
 .ascstr "alwaysputsaltinyoureye", $ff
-.db $00 ; Ed of data
+.db $00 ; End of data
+.ends
 
-SDSC_Author:
-.ascstr "SMS Sound Checker",0
-SDSC_Name:
-.db 0
-
-; data from dca to 15ca (2049 bytes)
+.section "Font" free
 FontData:
 .dw $4000
 .incbin "font.1bpp" read $7ff ; Data is truncated by one byte
+.ends
 
+.section "PSG variables init" free
 InitPSGVariables:
   ld hl, $03ff
   ld a, $0f
@@ -580,12 +587,14 @@ InitPSGVariables:
   ld (RAM_NoiseAttenuation), a
   ld a, $02
   ld (RAM_NoiseRate), a
-  ld a, $00
+  ld a, $01
   ld (RAM_NoiseMode), a
   ld hl, FunctionsTable
   ld (RAM_FunctionTablePointer), hl
   ret
+.ends
 
+.section "Menu handling" free
 RunFunctionFromTable:
   ld ix, (RAM_FunctionTablePointer)
   ; Read function address and RAM address
@@ -730,7 +739,7 @@ HandleNoiseType:
   ld a, (hl)
   ld hl, _Synch
   or a
-  jr nz, +
+  jr z, +
   ld hl, _White
 +:
   ld a, d
@@ -857,7 +866,9 @@ NoiseDescriptions:
 ++:   .ascstr "Med ", $FF
 +++:  .ascstr "Low ", $FF
 ++++: .ascstr "Ch.2", $FF
+.ends
 
+.section "Input handling" free
 InitInputVariables:
   ld a, $00
   ld (RAM_EffectiveInputs1), a
@@ -1088,14 +1099,18 @@ CheckInputs:
   ret nz
   set 5, d
   ret
+.ends
 
+.section "Pause muting" free
 InitPauseAndMute:
   ; Clear the pause flag
   ld a, $00
   ld (RAM_PauseFlag), a
   call MutePSG
   ret
+.ends
 
+.section "PSG update" free
 MutePSG:
   ld h, $00 ; Channel
   ld l, $0f ; Attenuation
@@ -1113,6 +1128,8 @@ MutePSG:
   ld l, $0f
   ld de, $03ff
   call WritePSGTone
+  xor a
+  ld (RAM_LastPSGModeWrite),a
   ret
 
 UpdatePSG:
@@ -1198,28 +1215,13 @@ WritePSGNoise:
   and %00000100
   or d
   or %11100000
+  ; Write only if changed
+  ld hl,RAM_LastPSGModeWrite
+  cp (hl)
+  ret z
   out (PORT_PSG), a
+  ld (hl),a
   ret
+.ends
 
-; Manual pre-SDSC tag
-.org $7fe0
-.ascstr "SGID"
-.db 1, 1 ; version 1.1
-.db $17, $02 ; Day, month
-.dw $2001 ; Year
-.dw SDSC_Author ; Author
-.dw SDSC_Name ; Name
-.dw $0000 ; Description
-
-.smsheader
-    productcode $20, $01, 0
-    version 0
-    regioncode 4
-.endsms
-;.db "TMR SEGA"
-;.dw $0000
-;.dw $61a2 ; checksum
-;.dw $0120
-;.db $00
-;.db $4c
-
+.sdsctag 1.2, "SMS Sound Test", "Nicolas Warren (Heliophobe)", "Extended by Maxim"
