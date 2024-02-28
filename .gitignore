@@ -1,0 +1,6 @@
+auto.makefile
+*.1bpp
+*.sms
+*.o
+linkfile
+*.sym
